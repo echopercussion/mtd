@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use log::debug;
 use yew::html::Scope;
 use yew::prelude::*;
 use rainfrog::dropdown::Dropdown;
@@ -19,6 +20,7 @@ pub enum Msg {
     SelectHeroes(Vec<Rc<Hero>>),
     SelectMap(Rc<OWMap>),
     SelectGroup(Vec<Rc<Account>>),
+    ClearSelections,
 }
 
 
@@ -80,12 +82,27 @@ impl Component for MatchEntry {
                         group,
                         map.game_mode(), // Use the game_mode() method to get the mode for the selected map
                     );
-    
+
+
+                    // Clear the selections after submitting the match
                     self.on_submit.emit(new_match);
+                    debug!("Match Submitted");
+                    self.link.send_message(Msg::ClearSelections);
                     true
                 } else {
+                    debug!("Match Not Submitted, not enough options selected");
+
                     false
                 }
+            }
+            Msg::ClearSelections => {
+                self.selected_account = None;
+                self.selected_game_result = None;
+                self.selected_heroes = None;
+                self.selected_map = None;
+                self.selected_group = None;
+                debug!("Selections Cleared");
+                true
             }
             Msg::SelectAccount(account) => {
                 self.selected_account = match Rc::try_unwrap(account) {
@@ -135,13 +152,24 @@ impl Component for MatchEntry {
             }
             
             Msg::SelectGroup(accounts) => {
-                let mut group = Group::new();
-                for account in accounts.into_iter() {
-                    group.add_account(Rc::try_unwrap(account).unwrap_or_else(|rc| (*rc).clone()));
+                if !accounts.is_empty() {
+                    let mut group = Group::new();
+                    for account in accounts.into_iter() {
+                        let result = group.add_account(Rc::try_unwrap(account).unwrap_or_else(|rc| (*rc).clone()));
+                        if let Err(e) = result {
+                            // Handle the error case here, e.g., log an error message.
+                            log::error!("Failed to add account to group: {:?}", e);
+                        }
+                    }
+                    self.selected_group = Some(group);
+                } else {
+                    self.selected_group = None;
                 }
-                self.selected_group = Some(group);
                 true
             }
+            
+            
+            
         }
     }
     
